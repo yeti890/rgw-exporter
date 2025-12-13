@@ -378,7 +378,7 @@ func (collector *RGWExporter) Collect(ch chan<- prometheus.Metric) {
 			objectsPerShard = bucketObjects / numShards
 		}
 
-		// aggragates
+		// aggregates
 		totalBucketSize += bucketSize
 		totalBucketActualSize += bucketActualSize
 		totalObjects += bucketObjects
@@ -651,24 +651,36 @@ func (collector *RGWExporter) Collect(ch chan<- prometheus.Metric) {
 
 	// ---------- service metrics ----------
 
+	collectBucketsDurationMu.Lock()
+	bucketsDur := collectBucketsDuration
+	collectBucketsDurationMu.Unlock()
+
+	collectUsageDurationMu.Lock()
+	usageDur := collectUsageDuration
+	collectUsageDurationMu.Unlock()
+
+	collectUsersDurationMu.Lock()
+	usersDur := collectUsersDuration
+	collectUsersDurationMu.Unlock()
+
 	ch <- prometheus.MustNewConstMetric(
 		collector.collector_buckets_duration_seconds,
 		prometheus.GaugeValue,
-		collectBucketsDuration.Seconds(),
+		bucketsDur.Seconds(),
 		region, cluster, endpoint,
 	)
 
 	ch <- prometheus.MustNewConstMetric(
 		collector.collector_usage_duration_seconds,
 		prometheus.GaugeValue,
-		collectUsageDuration.Seconds(),
+		usageDur.Seconds(),
 		region, cluster, endpoint,
 	)
 
 	ch <- prometheus.MustNewConstMetric(
 		collector.collector_users_duration_seconds,
 		prometheus.GaugeValue,
-		collectUsersDuration.Seconds(),
+		usersDur.Seconds(),
 		region, cluster, endpoint,
 	)
 }

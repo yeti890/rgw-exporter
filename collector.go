@@ -51,7 +51,7 @@ type UsageStats struct {
 	SuccessfulOps uint64
 }
 
-// Информация о пользователе + квоты
+// User info & quotes
 type UserInfo struct {
 	UserId      string
 	DisplayName string
@@ -75,23 +75,33 @@ func startRGWStatCollector(config *Config) {
 	tickerBuckets := time.NewTicker(time.Duration(config.BucketsCollectorInterval) * time.Second)
 	tickerUsers := time.NewTicker(time.Duration(config.UsersCollectorInterval) * time.Second)
 
-	// usage
+	// usage: collect immediately, then on each tick
 	go func() {
-		for ; ; <-tickerUsage.C {
+		collectUsage(conn, config.SkipWithoutBucket)
+		for range tickerUsage.C {
 			collectUsage(conn, config.SkipWithoutBucket)
 		}
 	}()
 
-	// buckets
+	// buckets: collect immediately, then on each tick
 	go func() {
-		for ; ; <-tickerBuckets.C {
+		collectBuckets(conn)
+		for range tickerBuckets.C {
 			collectBuckets(conn)
 		}
 	}()
 
-	// users
+	// users: if disabled — keep users=nil; if enabled — collect immediately, then on each tick
 	go func() {
-		for ; ; <-tickerUsers.C {
+		if config.UsersCollectorEnable {
+			collectUsers(conn)
+		} else {
+			usersMu.Lock()
+			users = nil
+			usersMu.Unlock()
+		}
+
+		for range tickerUsers.C {
 			if config.UsersCollectorEnable {
 				collectUsers(conn)
 			} else {
@@ -195,7 +205,6 @@ func collectUsers(conn *rgw.API) {
 		var userQuotaMaxSizeBytes float64
 		var userQuotaMaxObjects float64
 
-		// curUser.UserQuota — это QuotaSpec (значение), поля внутри — указатели
 		if curUser.UserQuota.Enabled != nil && *curUser.UserQuota.Enabled {
 			userQuotaEnabled = 1.0
 		}
@@ -215,7 +224,6 @@ func collectUsers(conn *rgw.API) {
 		var userBucketQuotaMaxSizeBytes float64
 		var userBucketQuotaMaxObjects float64
 
-		// curUser.BucketQuota — тоже QuotaSpec (значение)
 		if curUser.BucketQuota.Enabled != nil && *curUser.BucketQuota.Enabled {
 			userBucketQuotaEnabled = 1.0
 		}
@@ -259,34 +267,36 @@ func collectUsers(conn *rgw.API) {
 func sumUsage(usage rgw.Usage, skipWithoutBucket bool) map[UsageKey]*UsageStats {
 	usageStatsMap := make(map[UsageKey]*UsageStats)
 
-	for _, userUsage := range usage.Entries {
-		for _, bucket := range userUsage.Buckets {
+	for _, entry := range usage.Entries {
+		user := entry.User
+
+		for _, bucket := range entry.Buckets {
+			// Optional: skip summary entries without bucket name (depends on RGW payload)
 			if skipWithoutBucket && (bucket.Bucket == "" || bucket.Bucket == "-") {
 				continue
 			}
+
 			for _, category := range bucket.Categories {
 				key := UsageKey{
-					User:     userUsage.User,
+					User:     user,
 					Bucket:   bucket.Bucket,
 					Owner:    bucket.Owner,
 					Category: category.Category,
 				}
 
-				if stats, exists := usageStatsMap[key]; !exists {
-					usageStatsMap[key] = &UsageStats{
-						BytesSent:     category.BytesSent,
-						BytesReceived: category.BytesReceived,
-						Ops:           category.Ops,
-						SuccessfulOps: category.SuccessfulOps,
-					}
-				} else {
-					stats.BytesSent += category.BytesSent
-					stats.BytesReceived += category.BytesReceived
-					stats.Ops += category.Ops
-					stats.SuccessfulOps += category.SuccessfulOps
+				stats, ok := usageStatsMap[key]
+				if !ok {
+					stats = &UsageStats{}
+					usageStatsMap[key] = stats
 				}
+
+				stats.BytesSent += category.BytesSent
+				stats.BytesReceived += category.BytesReceived
+				stats.Ops += category.Ops
+				stats.SuccessfulOps += category.SuccessfulOps
 			}
 		}
 	}
+
 	return usageStatsMap
 }
