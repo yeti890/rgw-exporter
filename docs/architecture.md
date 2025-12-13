@@ -30,12 +30,6 @@ The exporter is designed for **large Ceph RGW clusters**, focusing on predictabi
 +----------------------------+
 ```
 
-```mermaid
-flowchart TB
-  P[Prometheus<br/>(scrape /metrics)] --> E[RGW Usage Exporter<br/>- usage collector<br/>- buckets collector<br/>- users collector]
-  E --> A[Ceph RGW Admin API<br/>(radosgw-admin equivalent)]
-```
-
 ---
 
 ## Core principles
