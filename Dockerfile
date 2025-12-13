@@ -1,5 +1,5 @@
 # ---------- build stage ----------
-FROM golang:1.25-alpine AS build
+FROM golang:1.25.5-alpine3.23 AS build
 WORKDIR /src
 COPY . .
 RUN --mount=type=cache,target=/go/pkg/mod \

@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 The format is based on **Keep a Changelog**, and this project adheres to **Semantic Versioning (SemVer)**.
 
+## [1.1.0] - 2025-12-13
+
+### Changed
+- Configuration is now **ENV-only** (recommended for container/systemd deployments).
+- Collector ticker loops refactored for clarity (explicit immediate run + periodic ticks).
+
+### Removed
+- Removed optional YAML config file support and the `-c` flag (to reduce complexity and avoid ENV/file precedence ambiguity).
+
+### Fixed
+- Fixed a potential data race when exporting collector duration metrics (durations are now read under mutex).
+
+### Security
+- Dependency cleanup and version pinning to reduce supply-chain risk and improve vulnerability scan results.
+
 ## [1.0.0] - 2025-12-12
 
 ### Added

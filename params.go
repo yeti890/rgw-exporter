@@ -1,36 +1,38 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"strconv"
-
-	"gopkg.in/yaml.v2"
 )
 
 type Config struct {
-	AccessKey string `yaml:"access_key"`
-	SecretKey string `yaml:"secret_key"`
-	Endpoint  string `yaml:"endpoint"`
-	Region    string `yaml:"region"`
+	AccessKey string
+	SecretKey string
 
-	ClusterName string `yaml:"cluster_name"`
+	// Internal RGW Admin endpoint
+	Endpoint string
 
-	PubEndpoint string `yaml:"pub_endpoint"`
+	Region string
 
-	ListenIP   string `yaml:"listen_ip"`
-	ListenPort int    `yaml:"listen_port"`
+	ClusterName string
 
-	UsageCollectorInterval   int  `yaml:"usage_collector_interval"`
-	BucketsCollectorInterval int  `yaml:"buckets_collector_interval"`
-	UsersCollectorInterval   int  `yaml:"users_collector_interval"`
-	RGWConnectionTimeout     int  `yaml:"rgw_connection_timeout"`
-	StartDelay               int  `yaml:"start_delay"`
-	Insecure                 bool `yaml:"insecure"`
-	SkipWithoutBucket        bool `yaml:"skip_without_bucket"`
+	// Public S3 endpoint (used as label "endpoint")
+	PubEndpoint string
 
-	UsersCollectorEnable bool `yaml:"users_collector_enable"`
+	ListenIP   string
+	ListenPort int
+
+	UsageCollectorInterval   int
+	BucketsCollectorInterval int
+	UsersCollectorInterval   int
+
+	RGWConnectionTimeout int
+	StartDelay           int
+	Insecure             bool
+	SkipWithoutBucket    bool
+
+	UsersCollectorEnable bool
 }
 
 func getEnv(key string, defaultValue string) string {
@@ -59,15 +61,13 @@ func getEnvBool(key string, defaultValue bool) bool {
 }
 
 func loadConfig() (*Config, error) {
-	config := &Config{
+	cfg := &Config{
 		AccessKey: getEnv("ACCESS_KEY", ""),
 		SecretKey: getEnv("SECRET_KEY", ""),
 
-		// Public RGW endpoint (Config.Endpoint)
 		Endpoint: getEnv("RGW_ENDPOINT", ""),
 
-		Region: getEnv("REGION", ""),
-
+		Region:      getEnv("REGION", ""),
 		ClusterName: getEnv("CLUSTER_NAME", ""),
 
 		PubEndpoint: getEnv("PUB_ENDPOINT", ""),
@@ -77,43 +77,30 @@ func loadConfig() (*Config, error) {
 
 		UsageCollectorInterval:   getEnvInt("USAGE_COLLECTOR_INTERVAL", 30),
 		BucketsCollectorInterval: getEnvInt("BUCKETS_COLLECTOR_INTERVAL", 300),
-		UsersCollectorInterval:   getEnvInt("USERS_COLLECTOR_INTERVAL", 3600),
+		UsersCollectorInterval:   getEnvInt("USERS_COLLECTOR_INTERVAL", 600),
 
-		RGWConnectionTimeout: getEnvInt("RGW_CONNECTION_TIMEOUT", 10),
+		RGWConnectionTimeout: getEnvInt("RGW_CONNECTION_TIMEOUT", 600),
 		StartDelay:           getEnvInt("START_DELAY", 30),
-		Insecure:             getEnvBool("INSECURE", false),
-		SkipWithoutBucket:    getEnvBool("SKIP_WITHOUT_BUCKET", false),
+
+		Insecure:          getEnvBool("INSECURE", false),
+		SkipWithoutBucket: getEnvBool("SKIP_WITHOUT_BUCKET", false),
 
 		UsersCollectorEnable: getEnvBool("USERS_COLLECTOR_ENABLE", false),
 	}
 
-	var configFile string
-	flag.StringVar(&configFile, "c", "", "config file")
-	flag.Parse()
-
-	if configFile == "" {
-		// Work with ENV only
-		return config, nil
+	// ---- Required fields validation ----
+	if cfg.AccessKey == "" {
+		return nil, fmt.Errorf("ACCESS_KEY is required")
+	}
+	if cfg.SecretKey == "" {
+		return nil, fmt.Errorf("SECRET_KEY is required")
+	}
+	if cfg.Endpoint == "" {
+		return nil, fmt.Errorf("RGW_ENDPOINT is required")
 	}
 
-	s, err := os.Stat(configFile)
-	if err != nil {
-		return nil, err
-	}
-	if s.IsDir() {
-		return nil, fmt.Errorf("'%s' is a directory, not a normal file", configFile)
-	}
-
-	file, err := os.Open(configFile)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	d := yaml.NewDecoder(file)
-	if err := d.Decode(&config); err != nil {
-		return nil, err
-	}
-
-	return config, nil
+	// PUB_ENDPOINT technically can be empty, but we strongly recommend setting it
+	// to make label "endpoint" meaningful. We keep it non-fatal to avoid breaking
+	// minimal lab setups.
+	return cfg, nil
 }
